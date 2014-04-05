@@ -11,12 +11,16 @@ window.LT = LT
 chrome.runtime.onConnect.addListener (port) ->
   if port.name == "lttools"
     port.onMessage.addListener (msg) ->
+      console.log msg
       LT.socket.emit "result", [undefined, "clients.raise-on-object", msg.data]
 
 # Does object script match filename. Checks for matching javascript files or
 # original source file (eg. coffeescript). Only matches on filename - further
 # path checks are done below to correctly identify the file.
 isScriptMatch = (script, filename) ->
+  # Don't match scripts that have been flagged as old even if source matches
+  return false if script.filename.match /\(old\)$/
+
   script.filename == filename || filename in script.sources
 
   
@@ -26,18 +30,19 @@ isScriptMatch = (script, filename) ->
 evalJs = (target, message) ->
   {tabId} = target
   [client, command, {name, path, pos, code, meta}] = message
-  filename = name.toLowerCase()
+  filename = name?.toLowerCase()
   tabScripts = attachedTabs[tabId].scripts
 
   scripts = (s for s in tabScripts when isScriptMatch s, filename)
   matchingScript = scripts[0] if scripts.length > 0
+  
   if scripts.length > 1
     # Get script that is closest match by comparing directory structure
-    parts = path.toLowerCase().split('/').reverse()
+    parts = path.toLowerCase().replace("/#{filename}", '').split('/').reverse()
     highest = -1
     for script in scripts
       length = 0
-      for str, i in script.directory.split('/').reverse()
+      for str, i in script.directory.replace(/\/$/, '').split('/').reverse()
         if str != parts[i] then break else length = length + 1
       if length > highest
         highest = length
@@ -45,6 +50,7 @@ evalJs = (target, message) ->
     
   # TODO: Handle inserting new scripts
   cb = (data) ->
+    console.log data
     data or = {}
     {result} = data
     meta or= {}
@@ -77,6 +83,7 @@ evalJs = (target, message) ->
     params =
       scriptId: matchingScript.scriptId
       scriptSource: code
+  console.log command, params
   chrome.debugger.sendCommand target, command, params, cb
 
 
@@ -150,7 +157,24 @@ attach = (target) ->
 
   chrome.debugger.attach target, VERSION, -> onAttach(target)
 
-  chrome.debugger.sendCommand target, "Runtime.enable", {}
+  chrome.debugger.sendCommand target, "Console.enable", {}
+  chrome.debugger.sendCommand target, "Runtime.enable", {}, ->
+    null
+    ### Prototype for angularjs watcheres
+    chrome.debugger.sendCommand target, "Runtime.evaluate", {
+      expression: """window.lttools = {
+          watch: function(data) {
+            var opts, parts, scopeName;
+            console.log(this);
+            parts = data.expression.split(".");
+            scopeName = parts.shift();
+            opts = data.opts;
+            this.$watch(parts.join('.'), function (a) { console.log(a); window.postMessage({action: 'lttools.watch', params: { expression: a, opts: opts}}, '*'); }, true);
+          }
+        };
+    """
+    }
+    ###
 
   onDebuggerEnabled = -> attachedTabs[target.tabId].status = "enabled"
   chrome.debugger.sendCommand target, "Debugger.enable", {}, onDebuggerEnabled
@@ -193,7 +217,7 @@ onScriptParsed = (target, params) ->
   {isContentScript, scriptId, url, sourceMapURL} = params
 
   # Ignore content scripts (extensions etc) or already parsed scripts
-  return if isContentScript || scriptId in attachedTabs[tabId].scriptIds
+  return if isContentScript
 
   path = url
   if matches = url.match /(http(s)?:\/\/([^/]*\/)|file:\/\/)(.*$)/
@@ -209,6 +233,8 @@ onScriptParsed = (target, params) ->
     scriptId: scriptId
     url: url
     sources: []
+
+  matchingScriptId = script.scriptId for script in scriptData when script.scriptId is scriptId
 
   if sourceMapURL
     getFile baseUrl+'/'+sourceMapURL, ->
@@ -232,6 +258,7 @@ onEvent = (target, method, params) ->
   switch method
     when "Debugger.scriptParsed" then onScriptParsed target, params
     when "Debugger.globalObjectCleared" then resetTarget target
+    when "Console.messageAdded" then null
     else console.log method
 
 

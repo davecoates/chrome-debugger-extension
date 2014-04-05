@@ -18,12 +18,16 @@
   chrome.runtime.onConnect.addListener(function(port) {
     if (port.name === "lttools") {
       return port.onMessage.addListener(function(msg) {
+        console.log(msg);
         return LT.socket.emit("result", [void 0, "clients.raise-on-object", msg.data]);
       });
     }
   });
 
   isScriptMatch = function(script, filename) {
+    if (script.filename.match(/\(old\)$/)) {
+      return false;
+    }
     return script.filename === filename || __indexOf.call(script.sources, filename) >= 0;
   };
 
@@ -31,7 +35,7 @@
     var cb, client, code, command, filename, highest, i, length, matchingScript, meta, name, params, parts, path, pos, s, script, scripts, str, tabId, tabScripts, _i, _j, _len, _len1, _ref, _ref1;
     tabId = target.tabId;
     client = message[0], command = message[1], (_ref = message[2], name = _ref.name, path = _ref.path, pos = _ref.pos, code = _ref.code, meta = _ref.meta);
-    filename = name.toLowerCase();
+    filename = name != null ? name.toLowerCase() : void 0;
     tabScripts = attachedTabs[tabId].scripts;
     scripts = (function() {
       var _i, _len, _results;
@@ -48,12 +52,12 @@
       matchingScript = scripts[0];
     }
     if (scripts.length > 1) {
-      parts = path.toLowerCase().split('/').reverse();
+      parts = path.toLowerCase().replace("/" + filename, '').split('/').reverse();
       highest = -1;
       for (_i = 0, _len = scripts.length; _i < _len; _i++) {
         script = scripts[_i];
         length = 0;
-        _ref1 = script.directory.split('/').reverse();
+        _ref1 = script.directory.replace(/\/$/, '').split('/').reverse();
         for (i = _j = 0, _len1 = _ref1.length; _j < _len1; i = ++_j) {
           str = _ref1[i];
           if (str !== parts[i]) {
@@ -70,6 +74,7 @@
     }
     cb = function(data) {
       var result, returnData;
+      console.log(data);
       data || (data = {});
       result = data.result;
       meta || (meta = {});
@@ -103,6 +108,7 @@
         scriptSource: code
       };
     }
+    console.log(command, params);
     return chrome["debugger"].sendCommand(target, command, params, cb);
   };
 
@@ -195,7 +201,26 @@
     chrome["debugger"].attach(target, VERSION, function() {
       return onAttach(target);
     });
-    chrome["debugger"].sendCommand(target, "Runtime.enable", {});
+    chrome["debugger"].sendCommand(target, "Console.enable", {});
+    chrome["debugger"].sendCommand(target, "Runtime.enable", {}, function() {
+      return null;
+      /* Prototype for angularjs watcheres
+      chrome.debugger.sendCommand target, "Runtime.evaluate", {
+        expression: """window.lttools = {
+            watch: function(data) {
+              var opts, parts, scopeName;
+              console.log(this);
+              parts = data.expression.split(".");
+              scopeName = parts.shift();
+              opts = data.opts;
+              this.$watch(parts.join('.'), function (a) { console.log(a); window.postMessage({action: 'lttools.watch', params: { expression: a, opts: opts}}, '*'); }, true);
+            }
+          };
+      """
+      }
+      */
+
+    });
     onDebuggerEnabled = function() {
       return attachedTabs[target.tabId].status = "enabled";
     };
@@ -248,10 +273,10 @@
   };
 
   onScriptParsed = function(target, params) {
-    var baseUrl, filename, hostname, isContentScript, matches, parts, path, scriptData, scriptId, sourceMapURL, tabId, url, _;
+    var baseUrl, filename, hostname, isContentScript, matches, matchingScriptId, parts, path, script, scriptData, scriptId, sourceMapURL, tabId, url, _, _i, _len;
     tabId = target.tabId;
     isContentScript = params.isContentScript, scriptId = params.scriptId, url = params.url, sourceMapURL = params.sourceMapURL;
-    if (isContentScript || __indexOf.call(attachedTabs[tabId].scriptIds, scriptId) >= 0) {
+    if (isContentScript) {
       return;
     }
     path = url;
@@ -269,6 +294,12 @@
       url: url,
       sources: []
     };
+    for (_i = 0, _len = scriptData.length; _i < _len; _i++) {
+      script = scriptData[_i];
+      if (script.scriptId === scriptId) {
+        matchingScriptId = script.scriptId;
+      }
+    }
     if (sourceMapURL) {
       getFile(baseUrl + '/' + sourceMapURL, function() {
         var sourceMap;
@@ -291,6 +322,8 @@
         return onScriptParsed(target, params);
       case "Debugger.globalObjectCleared":
         return resetTarget(target);
+      case "Console.messageAdded":
+        return null;
       default:
         return console.log(method);
     }
