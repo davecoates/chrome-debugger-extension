@@ -12,3 +12,5 @@ The main purpose of this is to use [setScriptSource](https://developers.google.c
 Javascript watchers don't currently work, [CoffeeScript](https://github.com/davecoates/lt-coffeescript) ones do (though sometimes it crashes the tab :). I'll be changing how these work soon.
 
 It's probably pretty buggy right now and my testing thus far has been contrived and not much on real projects - beware!
+
+NOTE: You cannot use chrome devtools while this is connected - if you do the connection will be closed. If you try to connect while devtools is open it won't work.
