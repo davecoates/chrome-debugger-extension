@@ -50,7 +50,6 @@ evalJs = (target, message) ->
     
   # TODO: Handle inserting new scripts
   cb = (data) ->
-    console.log data
     data or = {}
     {result} = data
     meta or= {}
@@ -83,7 +82,6 @@ evalJs = (target, message) ->
     params =
       scriptId: matchingScript.scriptId
       scriptSource: code
-  console.log command, params
   chrome.debugger.sendCommand target, command, params, cb
 
 
@@ -238,8 +236,13 @@ onScriptParsed = (target, params) ->
 
   if sourceMapURL
     getFile baseUrl+'/'+sourceMapURL, ->
-      sourceMap = JSON.parse this.response
-      scriptData.sources = sourceMap.sources
+      return if this.status != 200
+
+      try
+        sourceMap = JSON.parse this.response
+        scriptData.sources = sourceMap.sources
+      catch e
+        console.log("Failed to parse source map", e)
 
   attachedTabs[tabId].scripts.push scriptData
   attachedTabs[tabId].scriptIds.push scriptId

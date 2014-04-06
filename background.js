@@ -74,7 +74,6 @@
     }
     cb = function(data) {
       var result, returnData;
-      console.log(data);
       data || (data = {});
       result = data.result;
       meta || (meta = {});
@@ -108,7 +107,6 @@
         scriptSource: code
       };
     }
-    console.log(command, params);
     return chrome["debugger"].sendCommand(target, command, params, cb);
   };
 
@@ -302,9 +300,17 @@
     }
     if (sourceMapURL) {
       getFile(baseUrl + '/' + sourceMapURL, function() {
-        var sourceMap;
-        sourceMap = JSON.parse(this.response);
-        return scriptData.sources = sourceMap.sources;
+        var e, sourceMap;
+        if (this.status !== 200) {
+          return;
+        }
+        try {
+          sourceMap = JSON.parse(this.response);
+          return scriptData.sources = sourceMap.sources;
+        } catch (_error) {
+          e = _error;
+          return console.log("Failed to parse source map", e);
+        }
       });
     }
     attachedTabs[tabId].scripts.push(scriptData);
