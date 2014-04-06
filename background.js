@@ -171,11 +171,11 @@
     tabId = target.tabId;
     chrome.browserAction.setIcon({
       tabId: tabId,
-      path: "debuggerContinue.png"
+      path: "connected.png"
     });
     chrome.browserAction.setTitle({
       tabId: tabId,
-      title: "Stop Debugging Javascript"
+      title: "Disconnect from LT"
     });
     return chrome.tabs.executeScript(null, {
       file: "lttools.js"
@@ -238,7 +238,7 @@
   chrome.browserAction.onClicked.addListener(function(tab) {
     var onInit, target, _ref, _ref1;
     if (!LT.port || ((_ref = LT.socket) != null ? (_ref1 = _ref.socket) != null ? _ref1.reconnecting : void 0 : void 0)) {
-      LT.port = prompt("Port: ", LT.port);
+      LT.port = prompt("WebSocket Port (in LT Add Connection -> Ports): ", LT.port);
     }
     target = {
       tabId: tab.id
@@ -264,11 +264,11 @@
     attachedTabs[tabId].status = "detached";
     chrome.browserAction.setIcon({
       tabId: tabId,
-      path: "debuggerPause.png"
+      path: "disconnected.png"
     });
     return chrome.browserAction.setTitle({
       tabId: tabId,
-      title: "Debug Javascript"
+      title: "Connect to LT"
     });
   };
 

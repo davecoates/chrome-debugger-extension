@@ -2,16 +2,13 @@
   "name": "LightTable Chrome Debugger Interface",
   "description": "Interface LightTable with Chrome Debugger to allow remote debugging and code evaluation",
   "version": "0.0.1",
-  "permissions": [
-    "debugger"
-  ],
   "permissions": [ "debugger", "http://*/*", "https://*/*","activeTab"],
   "background": {
     "scripts": ["background.js", "socket.io.js"]
   },
   "browser_action": {
-    "default_icon": "debuggerPause.png",
-    "default_title": "Pause JavaScript"
+    "default_icon": "disconnected.png",
+    "default_title": "Connect to LT"
   },
   "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'",
   "manifest_version": 2

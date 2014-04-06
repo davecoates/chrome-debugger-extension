@@ -132,8 +132,8 @@ initSocket = (target, cb) ->
 # Called when debugger has attached to target
 onAttach = (target) ->
   {tabId} = target
-  chrome.browserAction.setIcon tabId: tabId, path: "debuggerContinue.png"
-  chrome.browserAction.setTitle tabId: tabId, title:"Stop Debugging Javascript"
+  chrome.browserAction.setIcon tabId: tabId, path: "connected.png"
+  chrome.browserAction.setTitle tabId: tabId, title:"Disconnect from LT"
 
   # Inject our tools used for src watching
   chrome.tabs.executeScript(null, {file: "lttools.js"})
@@ -189,7 +189,7 @@ getFile = (url, listener) ->
 # Listen for clicks on our icon
 chrome.browserAction.onClicked.addListener (tab) ->
   if not LT.port or LT.socket?.socket?.reconnecting
-    LT.port = prompt "Port: ", LT.port
+    LT.port = prompt "WebSocket Port (in LT Add Connection -> Ports): ", LT.port
   target = tabId: tab.id
 
   onInit = () ->
@@ -207,8 +207,8 @@ chrome.browserAction.onClicked.addListener (tab) ->
 onDetach = (target) ->
   {tabId} = target
   attachedTabs[tabId].status = "detached"
-  chrome.browserAction.setIcon tabId: tabId, path: "debuggerPause.png"
-  chrome.browserAction.setTitle tabId: tabId, title:"Debug Javascript"
+  chrome.browserAction.setIcon tabId: tabId, path: "disconnected.png"
+  chrome.browserAction.setTitle tabId: tabId, title: "Connect to LT"
 
 
 # Record each script that is parsed
