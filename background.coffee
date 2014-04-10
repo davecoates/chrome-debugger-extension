@@ -4,15 +4,79 @@ VERSION = "1.0"
 
 LT =
   host: "http://localhost"
-  port: null
+  port: 51703
   socket: null
 window.LT = LT
 
+# From lighttable/ws.js
+lttoolsSrc = """
+(function (window) {
+var toMessage = function(prev, command, data) {
+  return [prev.client,
+          command,
+          data];
+};
+var cache = [];
+
+function replacer(key, value) {
+  if(cache.length > 20) {
+    return;
+  }
+  if(window.jQuery && value instanceof jQuery) {
+    return "[jQuery $(" + value.selector + ")]";
+  }
+  if(value instanceof Element) {
+    return "[Element " + value.tagName.toLowerCase() + (value.id != "" ? "#" : "") + value.id + "]";
+  }
+  if(typeof(value) == "object") {
+    if(cache.indexOf(value) > -1) {
+      return "circular";
+    }
+    cache.push(value);
+    return value;
+  }
+  if(typeof value == "function") {
+    return "[function]";
+  }
+  return value;
+}
+
+function safeStringify(res) {
+  cache = [];
+  return JSON.stringify(res, replacer);
+}
+window.lttools = {
+  watch: function(exp, meta) {
+    if(meta.ev == "editor.eval.cljs.watch") {
+      var final = cljs.core.pr_str(exp);
+    } else {
+      meta["no-inspect"] = true;
+      var final = safeStringify(exp);
+    }
+    var r = toMessage({}, "clients.raise-on-object", [meta.obj, meta.ev, {result: final, meta: meta}]);
+    window.postMessage({action: 'lttools.watch', params: r}, '*');
+    return exp;
+  }
+}
+}(window));
+"""
+
+# Inject LTTools for watchers
+injectLighTableTools = (target) ->
+  command = "Runtime.evaluate"
+  params =
+    expression: lttoolsSrc
+  cb = (r) -> console.log "Injected LT tools"
+  chrome.debugger.sendCommand target, command, params, cb
+
+# This listens for messages. See lttools.coffee for where the postMessage is
+# done. This is used to communicate between contexts
 chrome.runtime.onConnect.addListener (port) ->
   if port.name == "lttools"
     port.onMessage.addListener (msg) ->
-      console.log msg
-      LT.socket.emit "result", [undefined, "clients.raise-on-object", msg.data]
+      console.log "Received message", msg
+      LT.socket.emit "result", msg.data
+
 
 # Does object script match filename. Checks for matching javascript files or
 # original source file (eg. coffeescript). Only matches on filename - further
@@ -28,6 +92,7 @@ isScriptMatch = (script, filename) ->
 # TODO: Refactor LT specific messages out. They can be handled on LT's end with
 # new client
 evalJs = (target, message) ->
+  console.log message
   {tabId} = target
   [client, command, {name, path, pos, code, meta}] = message
   filename = name?.toLowerCase()
@@ -50,6 +115,7 @@ evalJs = (target, message) ->
     
   # TODO: Handle inserting new scripts
   cb = (data) ->
+    console.log data
     data or = {}
     {result} = data
     meta or= {}
@@ -115,7 +181,7 @@ initSocket = (target, cb) ->
     onConnect = ->
       cb()
       socket.emit "init", {
-      name: window.location.host || window.title || window.location.href
+      name: "Chrome Remote Debugger"
       types: ["js", "css", "html"],
       commands: ["editor.eval.js",
                  "editor.eval.cljs.exec",
@@ -135,6 +201,8 @@ onAttach = (target) ->
 
   # Inject our tools used for src watching
   chrome.tabs.executeScript(null, {file: "lttools.js"})
+
+  injectLighTableTools(target)
 
 
 # Detach a tab from the debugger
@@ -254,6 +322,7 @@ resetTarget = (target) ->
   # avoids having stale cache due to refresh
   attachedTabs[target.tabId].scripts = []
   attachedTabs[target.tabId].scriptIds = []
+  injectLighTableTools(target)
 
 
 # Handle events
